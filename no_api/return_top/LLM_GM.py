@@ -6,10 +6,7 @@ from pinecone import Pinecone
 from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
 import time
 
-# ✅ 1️⃣ Cấu hình API Keys & Model
-os.environ["AZURE_OPENAI_API_KEY"] = "d539368d17bc4f609be5f18006f25800"
-os.environ["AZURE_OPENAI_ENDPOINT"] = "https://openai-centic.openai.azure.com/"
-os.environ["AZURE_OPENAI_API_VERSION"] = "2024-08-01-preview"
+
 
 # ✅ 2️⃣ Khởi tạo Pinecone và mô hình
 pinecone = Pinecone(
@@ -18,18 +15,6 @@ pinecone = Pinecone(
 index_name = "concurrent-vector-20-no-key"
 index = pinecone.Index(index_name)
 
-embedder = AzureOpenAIEmbeddings(
-    azure_deployment="text-embedding-3-small",
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
-)
-
-llm = AzureChatOpenAI(
-    azure_deployment="gpt-4o",
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION")
 )
 
 # ✅ 3️⃣ Hybrid Search & Reranking
