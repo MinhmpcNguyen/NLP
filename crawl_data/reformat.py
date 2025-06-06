@@ -6,6 +6,7 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 
 nltk.download("punkt")
+nltk.download("punkt_tab")
 
 
 def clean_text(content):
@@ -78,13 +79,11 @@ def split_long_entries(data, word_threshold=80):
 
 
 if __name__ == "__main__":
-    input_file = "crawl_results/results.json"
-    cleaned_output = (
-        "/Users/Yuki/NLP/no_api/reformat/processed_results/final_output.json"
+    input_file = (
+        "/home/sag/Working/Hust/NLP/crawl_data/crawl_data/crawl_results/results.json"
     )
-    segmented_output = (
-        "/Users/Yuki/NLP/no_api/reformat/processed_results/final_output_segmented.json"
-    )
+    cleaned_output = "/home/sag/Working/Hust/NLP/crawl_data/reformat/processed_results/final_output.json"
+    segmented_output = "/home/sag/Working/Hust/NLP/crawl_data/reformat/processed_results/final_output_segmented.json"
 
     os.makedirs(os.path.dirname(cleaned_output), exist_ok=True)
 

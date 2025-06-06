@@ -83,29 +83,41 @@ def divide_to_paragraphs(url_content: str):
     pattern = re.compile(r"^(#{1,})\s*(.*)", re.MULTILINE)
 
     sections = []
+    current_headers = []  # Stores accumulated headers without content
     current_content = []  # Stores content for current section
-    current_header = ""  # Stores the current header
 
     for line in url_content.split("\n"):
         match = pattern.match(line)
         if match:  # If the line is a header
-            # Save previous section if it has content
-            if current_content and current_header:
-                section = current_header + "\n" + "\n".join(current_content)
-                sections.append(section)
+            header_level = len(match.group(1))
 
-            # Start new section
-            current_header = line  # Keep the original header format
-            current_content = []  # Reset content for new section
+            # Check if we have content to save with accumulated headers
+            if current_content:
+                # Save section with all accumulated headers and content
+                if current_headers:
+                    section = (
+                        "\n".join(current_headers) + "\n" + "\n".join(current_content)
+                    )
+                    sections.append(section)
+                current_headers = []
+                current_content = []
+
+            # Add current header to accumulated headers
+            current_headers.append(line)
 
         else:
             # Add content to current section
             if line.strip():  # Only add non-empty lines
                 current_content.append(line)
 
-    # Add the last section if it has content
-    if current_content and current_header:
-        section = current_header + "\n" + "\n".join(current_content)
+    # Handle remaining headers and content
+    if current_headers:
+        if current_content:
+            # Headers with content
+            section = "\n".join(current_headers) + "\n" + "\n".join(current_content)
+        else:
+            # Headers without content - merge them all
+            section = "\n".join(current_headers)
         sections.append(section)
 
     return sections

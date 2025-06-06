@@ -139,13 +139,38 @@ async def fetch_and_process(
             if result.markdown_v2 and result.markdown_v2.fit_markdown
             else ""
         )
+
         processed_markdown = divide_to_paragraphs(markdown)
-        print(f"Processed markdown: {processed_markdown}")
+
+        # Skip pages with empty markdown content
+        if not processed_markdown:
+            print(f"Skipping URL with empty markdown: {normalized_url}")
+            # Still process internal links for further crawling
+            if depth < max_depth and result.links and "internal" in result.links:
+                for link in result.links["internal"]:
+                    absolute_url = urljoin(base_url, link["href"])
+                    parsed_link = urlparse(absolute_url)
+                    normalized_link = (
+                        parsed_link._replace(fragment="").geturl().rstrip("/")
+                    )
+
+                    if normalized_link not in visited:
+                        await fetch_and_process(
+                            crawler,
+                            normalized_link,
+                            max_depth,
+                            depth + 1,
+                            visited=visited,
+                            results=results,
+                            results_file=results_file,
+                            failed_links_file=failed_links_file,
+                        )
+            return results
 
         page_data = {
             "depth": depth,
             "url": normalized_url,
-            "markdown": [processed_markdown] if processed_markdown else [],
+            "markdown": [processed_markdown],
         }
 
         async with aiohttp.ClientSession() as session:
@@ -197,10 +222,10 @@ async def fetch_and_process(
 
 async def main():
     ensure_playwright_installed()
-    start_url = "https://ctt.hust.edu.vn/"
-    max_depth = 0
+    start_url = "https://www.hust.edu.vn"
+    max_depth = 5
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_6.json")
+    results_file = os.path.join(results_dir, "results_7.json")
     failed_links_file = os.path.join(results_dir, "failed_links.txt")
 
     os.makedirs(results_dir, exist_ok=True)
