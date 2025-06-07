@@ -260,11 +260,11 @@ async def fetch_and_process(
 
 async def main():
     ensure_playwright_installed()
-    start_url = "https://soict.hust.edu.vn/category/gioi-thieu"
-    max_depth = 10
+    start_url = "https://drive.google.com/file/d/1OePEnRakaINDWiISesP719JuHFpX8SWS/view"
+    max_depth = 0
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_soict.json")
-    failed_links_file = os.path.join(results_dir, "failed_links_soict.txt")
+    results_file = os.path.join(results_dir, "results_drive.json")
+    failed_links_file = os.path.join(results_dir, "failed_links_drive.txt")
 
     os.makedirs(results_dir, exist_ok=True)
     open(failed_links_file, "w", encoding="utf-8").close()
