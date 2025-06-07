@@ -2,21 +2,21 @@ import asyncio
 import json
 from typing import Dict, List
 
-import fasttext
 import numpy as np
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ====== GLOBAL STATE ======
 embedding_cache = {}
-ft_model = None
+sentence_model = None
 # ===========================
 
 
-# ✅ Load FastText model
+# ✅ Load SentenceTransformer model
 async def initialize_embedding_utils():
-    global ft_model
-    ft_model = fasttext.load_model("cc.vi.300.bin")
-    return {"embedding": "FastText Vietnamese"}
+    global sentence_model
+    sentence_model = SentenceTransformer("intfloat/multilingual-e5-large")
+    return {"embedding": "SentenceTransformer - multilingual-e5-large"}
 
 
 # ✅ Embed một đoạn văn
@@ -24,7 +24,9 @@ async def create_embedding(paragraph: str):
     if paragraph in embedding_cache:
         return embedding_cache[paragraph]
 
-    embedding = await asyncio.to_thread(ft_model.get_sentence_vector, paragraph)
+    embedding = await asyncio.to_thread(
+        sentence_model.encode, paragraph, normalize_embeddings=True
+    )
     embedding = np.array(embedding)
     embedding_cache[paragraph] = embedding
     return embedding
@@ -75,7 +77,7 @@ def load_paragraphs_with_source(file_path: str) -> List[Dict[str, str]]:
 # ✅ Thực hiện cluster và gắn URL lại
 async def cluster_paragraphs_only(
     paragraphs: List[Dict[str, str]],
-    similarity_threshold: float = 0.75,
+    similarity_threshold: float = 0.85,
     distance_threshold: float = 1.5,
 ):
     texts = [p["text"] for p in paragraphs]
@@ -103,8 +105,8 @@ async def cluster_paragraphs_only(
 async def main():
     await initialize_embedding_utils()
 
-    file_path = "/Users/Yuki/NLP/no_api/chunking/sem_len/sem_len.json"  # NDJSON input
-    output_path = "/Users/Yuki/NLP/no_api/chunking/cluster/sem_len_cluster.json"
+    file_path = "NLP/no_api/chunking/sem_len/sem_len.json"  # NDJSON input
+    output_path = "NLP/no_api/chunking/cluster/sem_len_cluster.json"
 
     paragraphs = load_paragraphs_with_source(file_path)
     clustered = await cluster_paragraphs_only(paragraphs)

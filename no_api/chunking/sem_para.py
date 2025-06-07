@@ -5,6 +5,7 @@ from typing import List, Optional
 import numpy as np
 import tiktoken
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity as cosine_sim
 
 # Load environment variables
@@ -12,38 +13,32 @@ load_dotenv()
 
 # Globals
 embedding_cache = {}
-azure_embedder = None
-azure_chat_model = None
+sentence_model = None
 
 # Tiktoken encoder
 encoding = tiktoken.get_encoding("cl100k_base")
 
-import fasttext
 
 # ---------------------------------------------------
-# -- Initialize Azure OpenAI Embedding --
+# -- Initialize SentenceTransformer Embedding --
 # ---------------------------------------------------
-ft_model = None
-
-
 async def initialize_embedding_utils():
-    global ft_model
-
-    model_path = (
-        "cc.vi.300.bin"  # hoặc dùng os.path.expanduser("~/.fasttext/cc.vi.300.bin")
-    )
-    ft_model = fasttext.load_model(model_path)
-
-    return {"embedding": "FastText Vietnamese"}
+    global sentence_model
+    sentence_model = SentenceTransformer("intfloat/multilingual-e5-large")
+    return {"embedding": "SentenceTransformer - multilingual-e5-large"}
 
 
+# ---------------------------------------------------
+# -- Create Embedding --
+# ---------------------------------------------------
 async def create_embedding(paragraph: str):
     if paragraph in embedding_cache:
         return embedding_cache[paragraph]
 
-    embedding = await asyncio.to_thread(ft_model.get_sentence_vector, paragraph)
-    embedding = np.array(embedding)  # Đảm bảo về dạng np.ndarray
-
+    embedding = await asyncio.to_thread(
+        sentence_model.encode, paragraph, normalize_embeddings=True
+    )
+    embedding = np.array(embedding)
     embedding_cache[paragraph] = embedding
     return embedding
 
@@ -118,8 +113,8 @@ async def create_chunks(
     paragraphs: List[str],
     similarities: Optional[List[float]],
     similarity_threshold: float,
-    max_length=400,  # chunk lý tưởng nằm khoảng 250–400 tokens
-    min_length=30,  # câu ngắn hơn 30 token thì nên merge vào
+    max_length=400,
+    min_length=30,
     ultimate_max_length=512,
 ) -> List[str]:
     chunks = []
@@ -171,15 +166,12 @@ async def rechunk_clustered_data(input_path: str, output_path: str):
         if not raw_paragraphs:
             continue
 
-        # 👉 Trích ra text và url
         paragraphs = [p["text"] for p in raw_paragraphs]
         urls = [p["url"] for p in raw_paragraphs]
 
-        # ✅ Tính độ tương đồng
         sim_result = await compute_advanced_similarities(paragraphs)
         threshold = adjust_threshold(sim_result["average"], sim_result["variance"])
 
-        # ✅ Chunk lại (theo text)
         chunks = []
         current_chunk = [paragraphs[0]]
         current_urls = [urls[0]]
@@ -198,8 +190,8 @@ async def rechunk_clustered_data(input_path: str, output_path: str):
 
             should_merge = (
                 (similarity is None or similarity >= threshold)
-                and (combined_length <= 400 or chunk_length < 30 or next_length < 30)
-                and combined_length <= 512
+                and (combined_length <= 2048 or chunk_length < 30 or next_length < 30)
+                and combined_length <= 2048
             )
 
             if should_merge:
@@ -207,11 +199,10 @@ async def rechunk_clustered_data(input_path: str, output_path: str):
                 current_urls.append(next_url)
                 chunk_length += next_length
             else:
-                # Gộp nội dung lại, lấy url đầu tiên (hoặc kết hợp nhiều url)
                 chunks.append(
                     {
                         "content": " ".join(current_chunk).strip(),
-                        "source_urls": list(set(current_urls)),  # loại trùng
+                        "source_urls": list(set(current_urls)),
                     }
                 )
                 current_chunk = [next_paragraph]
@@ -226,10 +217,8 @@ async def rechunk_clustered_data(input_path: str, output_path: str):
                 }
             )
 
-        # Lưu lại kết quả cho từng cluster
         result[cluster_name] = {"Chunks": chunks}
 
-    # Ghi file
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=4, ensure_ascii=False)
 
@@ -242,8 +231,8 @@ async def rechunk_clustered_data(input_path: str, output_path: str):
 async def main():
     await initialize_embedding_utils()
     await rechunk_clustered_data(
-        input_path="/Users/Yuki/NLP/no_api/chunking/cluster/sem_len_cluster.json",
-        output_path="/Users/Yuki/NLP/no_api/chunking/cluster/sem_len_cluster_rechunked.json",
+        input_path="NLP/no_api/chunking/cluster/sem_len_cluster.json",
+        output_path="NLP/no_api/chunking/cluster/sem_len_cluster_rechunked.json",
     )
 
 

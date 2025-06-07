@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import numpy as np
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity as cosine_sim
 
 # Load environment variables
@@ -12,38 +13,26 @@ load_dotenv()
 
 # Global variables
 embedding_cache = {}
-azure_embedder = None
-azure_chat_model = None
+sentence_model = None
 
 
 # ---------------------------------------------------
-# -- Initialize Azure OpenAI and tokenizer --
+# -- Initialize SentenceTransformer --
 # ---------------------------------------------------
-import fasttext
-
-# Global
-embedding_cache = {}
-ft_model = None
-
-
 async def initialize_embedding_utils():
-    global ft_model
-
-    model_path = (
-        "cc.vi.300.bin"  # hoặc dùng os.path.expanduser("~/.fasttext/cc.vi.300.bin")
-    )
-    ft_model = fasttext.load_model(model_path)
-
-    return {"embedding": "FastText Vietnamese"}
+    global sentence_model
+    sentence_model = SentenceTransformer("intfloat/multilingual-e5-large")
+    return {"embedding": "SentenceTransformer - multilingual-e5-large"}
 
 
 async def create_embedding(paragraph: str):
     if paragraph in embedding_cache:
         return embedding_cache[paragraph]
 
-    embedding = await asyncio.to_thread(ft_model.get_sentence_vector, paragraph)
-    embedding = np.array(embedding)  # Đảm bảo về dạng np.ndarray
-
+    embedding = await asyncio.to_thread(
+        sentence_model.encode, paragraph, normalize_embeddings=True
+    )
+    embedding = np.array(embedding)
     embedding_cache[paragraph] = embedding
     return embedding
 
@@ -137,9 +126,8 @@ def adjust_threshold(
 # -----------------------------------------------------------
 # -- Function to create chunks of paragraphs based on similarity --
 # -----------------------------------------------------------
-import tiktoken  # hoặc dùng tokenizer của bạn
+import tiktoken
 
-# Giả định bạn dùng tiktoken tokenizer
 encoding = tiktoken.get_encoding("cl100k_base")
 
 
@@ -195,24 +183,18 @@ async def create_chunks(
 
 
 def remove_duplicate_chunks(data):
-    """Loại bỏ chunks trùng lặp trên toàn bộ tập dữ liệu, nhưng chỉ nếu chúng xuất hiện trong nhiều tài liệu khác nhau."""
-    seen_chunks = {}  # Sử dụng dict để lưu URL đầu tiên của mỗi chunk
+    seen_chunks = {}
     filtered_data = []
 
     for doc in data:
         new_chunks = []
         for chunk in doc["Chunks"]:
             content = chunk["content"].strip()
-
-            # Kiểm tra nếu chunk này đã tồn tại trong một tài liệu trước đó
             if content in seen_chunks:
-                # Nếu chunk đã được lưu trong một tài liệu khác, bỏ qua chunk này
                 print(
                     f"🗑️ Removing duplicate chunk in {doc['Url']} (already exists in {seen_chunks[content]})"
                 )
                 continue
-
-            # Nếu chunk chưa tồn tại, thêm vào bộ nhớ
             seen_chunks[content] = doc["Url"]
             new_chunks.append(chunk)
 
@@ -225,8 +207,6 @@ def remove_duplicate_chunks(data):
 # -----------------------------------------------------------
 # -- Main Execution --
 # -----------------------------------------------------------
-
-
 from tqdm import tqdm
 
 
@@ -241,8 +221,8 @@ async def main():
 
     await initialize_embedding_utils()
 
-    input_file = "/Users/Yuki/NLP/no_api/reformat/processed_results/final_output.json"
-    output_file = "/Users/Yuki/NLP/no_api/chunking/sem_len.json"
+    input_file = "NLP/crawl_data/processed_results/final_result/merged_output.json"
+    output_file = "NLP/no_api/chunking/sem_len/sem_len.json"
 
     print("📥 Loading input data...")
     with open(input_file, "r", encoding="utf-8") as f:
@@ -257,7 +237,6 @@ async def main():
             print(f"⚠️ Skipping {doc['url']} - No content found.")
             continue
 
-        # 🔄 Tách toàn bộ đoạn văn thành các câu
         sentences = []
         for para in raw_paragraphs:
             if isinstance(para, str):
@@ -292,9 +271,5 @@ async def main():
     print(f"⏱️ Total execution time: {time.time() - start_time:.2f} seconds.")
 
 
-# ✅ **🔟 Chạy Script**
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-# 71.66s

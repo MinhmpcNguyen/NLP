@@ -32,8 +32,8 @@ def chunk_by_length(content_list, max_words=200, min_words=30):
 
 
 # ✅ Ví dụ dùng
-input_file = "/Users/Yuki/NLP/no_api/reformat/processed_results/final_output.json"
-output_file = "/Users/Yuki/NLP/no_api/chunking/length/len.json"
+input_file = "NLP/crawl_data/processed_results/final_result/merged_output.json"
+output_file = "NLP/no_api/chunking/length/len.json"
 
 with open(input_file, "r", encoding="utf-8") as f:
     data = json.load(f)

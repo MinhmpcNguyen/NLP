@@ -10,10 +10,12 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 import fitz
 import pandas as pd
+import pytesseract
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from docx import Document
+from pdf2image import convert_from_path
 from process_markdown import *
 
 
@@ -33,6 +35,18 @@ def ensure_playwright_installed():
             subprocess.run(["playwright", "install", "chromium"], check=True)
         except Exception as e:
             print(f"Lỗi khi cài Chromium: {e}")
+
+
+def ocr_pdf_image_to_text(pdf_path):
+    try:
+        images = convert_from_path(pdf_path)
+        text = ""
+        for img in images:
+            text += pytesseract.image_to_string(img, lang="vie") + "\n"
+        return text.strip()
+    except Exception as e:
+        print(f"❌ Lỗi OCR ảnh PDF: {e}")
+        return ""
 
 
 async def fetch_file_content(session, url, failed_links_file):
@@ -71,7 +85,12 @@ async def fetch_file_content(session, url, failed_links_file):
             doc = fitz.open(tmp_path)
             content = "\n".join(page.get_text() for page in doc)
             doc.close()
-            header = "PDF File"
+            if not content.strip():  # Nếu không có text, dùng OCR
+                print("🔍 Không phát hiện text trong PDF, chuyển sang OCR...")
+                content = ocr_pdf_image_to_text(tmp_path)
+                header = "PDF File (OCR)"
+            else:
+                header = "PDF File"
         elif file_ext in ["doc", "docx"]:
             doc = Document(tmp_path)
             content = "\n".join(para.text for para in doc.paragraphs)
@@ -109,7 +128,26 @@ async def fetch_and_process(
     base_url = url.rstrip("/")
     parsed_url = urlparse(url)
     normalized_url = parsed_url._replace(fragment="").geturl().rstrip("/")
-
+    if any(
+        normalized_url.lower().endswith(ext)
+        for ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx"]
+    ):
+        print(f"📄 URL là file tài liệu: {normalized_url} → xử lý trực tiếp")
+        async with aiohttp.ClientSession() as session:
+            file_header, file_content = await fetch_file_content(
+                session, normalized_url, failed_links_file
+            )
+            if file_content:
+                results.append(
+                    {
+                        "depth": depth,
+                        "url": normalized_url,
+                        "markdown": [{file_header: [file_content]}],
+                    }
+                )
+                with open(results_file, "w", encoding="utf-8") as file:
+                    json.dump(results, file, indent=4, ensure_ascii=False)
+        return results
     if normalized_url in visited:
         return results
 
@@ -222,11 +260,11 @@ async def fetch_and_process(
 
 async def main():
     ensure_playwright_installed()
-    start_url = "https://www.hust.edu.vn"
-    max_depth = 5
+    start_url = "https://soict.hust.edu.vn/category/gioi-thieu"
+    max_depth = 10
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_7.json")
-    failed_links_file = os.path.join(results_dir, "failed_links.txt")
+    results_file = os.path.join(results_dir, "results_soict.json")
+    failed_links_file = os.path.join(results_dir, "failed_links_soict.txt")
 
     os.makedirs(results_dir, exist_ok=True)
     open(failed_links_file, "w", encoding="utf-8").close()

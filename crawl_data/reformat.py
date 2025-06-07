@@ -1,107 +1,77 @@
 import json
-import os
-import re
-
-import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
-
-nltk.download("punkt")
-nltk.download("punkt_tab")
+from typing import Any, Dict, List
 
 
-def clean_text(content):
-    content = re.sub(r"#+", "", content).strip()
-    content = re.sub(r"\n+", " ", content).strip()
-    content = re.sub(r" {2,}", " ", content).strip()
-    return content
+def extract_content_from_markdown(markdown: List[Any]) -> List[str]:
+    """
+    Làm phẳng danh sách markdown và gắn prefix nếu là file (dict).
+    """
+    flat_content = []
+    for item in markdown:
+        if isinstance(item, list):
+            flat_content.extend(item)
+        elif isinstance(item, dict):
+            for key, values in item.items():
+                for v in values:
+                    flat_content.append(f"{key}: {v}")
+    return flat_content
 
 
-def process_json(json_data):
-    processed_data = []
-    unique_contents = set()
+def reformat_and_deduplicate(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Bước 1: gom tất cả content lại với thông tin URL + depth
+    all_contents = {}  # content -> (url, depth)
 
-    for item in json_data:
-        url = item.get("url")
-        combined_contents = []
+    url_to_content_raw = {}  # url -> list of raw content
+    url_to_depth = {}
 
-        markdown_blocks = item.get("markdown", [])
-        if isinstance(markdown_blocks, list):
-            for block in markdown_blocks:
-                if isinstance(block, list):
-                    for entry in block:
-                        if isinstance(entry, dict):
-                            for key, values in entry.items():
-                                if isinstance(values, list):
-                                    for value in values:
-                                        key_clean = clean_text(key)
-                                        value_clean = clean_text(value)
-                                        combined = f"{key_clean}: {value_clean}"
+    for entry in data:
+        url = entry["url"]
+        depth = entry.get("depth", 0)
+        url_to_depth[url] = depth
+        content_list = extract_content_from_markdown(entry.get("markdown", []))
+        url_to_content_raw.setdefault(url, []).extend(content_list)
 
-                                        if combined not in unique_contents:
-                                            unique_contents.add(combined)
-                                            combined_contents.append(combined)
-                elif isinstance(block, dict):
-                    for key, values in block.items():
-                        if isinstance(values, list):
-                            for value in values:
-                                key_clean = clean_text(key)
-                                value_clean = clean_text(value)
-                                combined = f"{key_clean}: {value_clean}"
-
-                                if combined not in unique_contents:
-                                    unique_contents.add(combined)
-                                    combined_contents.append(combined)
-
-        if combined_contents:
-            processed_data.append({"url": url, "content": combined_contents})
-
-    return processed_data
-
-
-def split_long_entries(data, word_threshold=80):
-    new_data = []
-
-    for doc in data:
-        url = doc["url"]
-        new_contents = []
-
-        for entry in doc["content"]:
-            num_words = len(word_tokenize(entry))
-            if num_words > word_threshold:
-                split_sentences = sent_tokenize(entry)
-                new_contents.extend(split_sentences)
+    # Bước 2: lọc content để giữ URL có depth nhỏ nhất
+    for url, contents in url_to_content_raw.items():
+        for content in contents:
+            if content not in all_contents:
+                all_contents[content] = (url, url_to_depth[url])
             else:
-                new_contents.append(entry)
+                existing_url, existing_depth = all_contents[content]
+                # Giữ lại content tại URL có depth nhỏ hơn
+                if url_to_depth[url] < existing_depth:
+                    all_contents[content] = (url, url_to_depth[url])
 
-        new_data.append({"url": url, "content": new_contents})
+    # Bước 3: gom lại content hợp lệ theo url
+    filtered_result = {}
+    for content, (url, _) in all_contents.items():
+        filtered_result.setdefault(url, set()).add(content)
 
-    return new_data
+    # Bước 4: format lại thành list và remove trùng trong cùng URL
+    final_result = []
+    for url, content_set in filtered_result.items():
+        final_result.append({"url": url, "content": sorted(content_set)})
+
+    return final_result
+
+
+# =============================================
+# ✅ MAIN: Load input, process, and save output
+# =============================================
+def main():
+    input_path = "crawl_data/crawl_results/results_ctt.json"
+    output_path = "NLP/crawl_data/processed_results/ctt_output.json"
+
+    with open(input_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    reformatted = reformat_and_deduplicate(data)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(reformatted, f, indent=4, ensure_ascii=False)
+
+    print(f"✅ Reformatted output saved to {output_path}")
 
 
 if __name__ == "__main__":
-    input_file = (
-        "/home/sag/Working/Hust/NLP/crawl_data/crawl_data/crawl_results/results.json"
-    )
-    cleaned_output = "/home/sag/Working/Hust/NLP/crawl_data/reformat/processed_results/final_output.json"
-    segmented_output = "/home/sag/Working/Hust/NLP/crawl_data/reformat/processed_results/final_output_segmented.json"
-
-    os.makedirs(os.path.dirname(cleaned_output), exist_ok=True)
-
-    with open(input_file, "r", encoding="utf-8") as f:
-        raw_data = json.load(f)
-
-    processed = process_json(raw_data)
-
-    with open(cleaned_output, "w", encoding="utf-8") as f:
-        json.dump(processed, f, indent=4, ensure_ascii=False)
-
-    print(f"Giai đoạn 1: Đã xử lý xong. Output lưu tại: {cleaned_output}")
-
-    segmented = split_long_entries(processed, word_threshold=80)
-
-    with open(segmented_output, "w", encoding="utf-8") as f:
-        json.dump(segmented, f, indent=4, ensure_ascii=False)
-
-    print(
-        f"Giai đoạn 2: Đã tách đoạn dài thành câu. Output lưu tại: {segmented_output}"
-    )
+    main()
