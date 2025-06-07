@@ -49,27 +49,31 @@ def ocr_pdf_image_to_text(pdf_path):
         return ""
 
 
-async def fetch_file_content(session, url, failed_links_file):
+async def fetch_file_content(session, url, failed_links_file=None):
     file_ext = url.split(".")[-1].lower()
     try:
         async with session.get(url) as response:
             if response.status != 200:
-                with open(failed_links_file, "a", encoding="utf-8") as f:
-                    f.write(url + "\n")
+                if failed_links_file:
+                    with open(failed_links_file, "a", encoding="utf-8") as f:
+                        f.write(url + "\n")
                 return None, None
 
             content_type = response.headers.get("Content-Type", "")
             if file_ext == "pdf" and "pdf" not in content_type:
-                with open(failed_links_file, "a", encoding="utf-8") as f:
-                    f.write(url + "\n")
+                if failed_links_file:
+                    with open(failed_links_file, "a", encoding="utf-8") as f:
+                        f.write(url + "\n")
                 return None, None
             if file_ext in ["doc", "docx"] and "word" not in content_type:
-                with open(failed_links_file, "a", encoding="utf-8") as f:
-                    f.write(url + "\n")
+                if failed_links_file:
+                    with open(failed_links_file, "a", encoding="utf-8") as f:
+                        f.write(url + "\n")
                 return None, None
             if file_ext in ["xls", "xlsx"] and "spreadsheet" not in content_type:
-                with open(failed_links_file, "a", encoding="utf-8") as f:
-                    f.write(url + "\n")
+                if failed_links_file:
+                    with open(failed_links_file, "a", encoding="utf-8") as f:
+                        f.write(url + "\n")
                 return None, None
 
             with tempfile.NamedTemporaryFile(
@@ -105,8 +109,9 @@ async def fetch_file_content(session, url, failed_links_file):
 
     except Exception as e:
         print(f"Error reading file {url}: {e}")
-        with open(failed_links_file, "a", encoding="utf-8") as f:
-            f.write(url + "\n")
+        if failed_links_file:
+            with open(failed_links_file, "a", encoding="utf-8") as f:
+                f.write(url + "\n")
         return None, None
 
 
@@ -117,8 +122,8 @@ async def fetch_and_process(
     depth=0,
     visited=None,
     results=None,
-    results_file="results.json",
-    failed_links_file="failed_links.txt",
+    results_file=None,
+    failed_links_file=None,
 ):
     if visited is None:
         visited = set()
@@ -231,8 +236,10 @@ async def fetch_and_process(
 
         results.append(page_data)
 
-        with open(results_file, "w", encoding="utf-8") as file:
-            json.dump(results, file, indent=4, ensure_ascii=False)
+        # Only save to file if results_file is provided
+        if results_file:
+            with open(results_file, "w", encoding="utf-8") as file:
+                json.dump(results, file, indent=4, ensure_ascii=False)
 
         if depth < max_depth and result.links and "internal" in result.links:
             for link in result.links["internal"]:
@@ -256,6 +263,26 @@ async def fetch_and_process(
         print(f"Error processing URL {normalized_url}: {e}")
 
     return results
+
+
+async def crawl_url(url):
+    browser_config = BrowserConfig(browser_type="chromium", headless=True)
+    crawler = AsyncWebCrawler(config=browser_config)
+
+    await crawler.start()
+
+    try:
+        result = await fetch_and_process(
+            crawler=crawler,
+            url=url,
+            max_depth=0,
+        )
+        return result
+    except Exception as e:
+        print(f"Error during crawling: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        await crawler.close()
 
 
 async def main():
