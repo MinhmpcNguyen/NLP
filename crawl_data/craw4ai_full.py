@@ -16,7 +16,8 @@ from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from docx import Document
 from pdf2image import convert_from_path
-from process_markdown import *
+
+from crawl_data.process_markdown import *
 
 
 def ensure_playwright_installed():
@@ -287,11 +288,11 @@ async def crawl_url(url):
 
 async def main():
     ensure_playwright_installed()
-    start_url = "https://hust.edu.vn/vi/tuyen-sinh/dai-hoc/thong-tin-tuyen-sinh-dai-hoc-chinh-quy-nam-2025-651872.html"
+    start_url = "⁦https://vi.wikipedia.org/wiki/Genshin_Impact⁩"
     max_depth = 0
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_http_hust.json")
-    failed_links_file = os.path.join(results_dir, "failed_links_hut.txt")
+    results_file = os.path.join(results_dir, "results_drive3.json")
+    failed_links_file = os.path.join(results_dir, "failed_links_drive.txt")
 
     os.makedirs(results_dir, exist_ok=True)
     open(failed_links_file, "w", encoding="utf-8").close()
