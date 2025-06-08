@@ -4,7 +4,6 @@ from operator import itemgetter
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -28,8 +27,8 @@ if not os.path.exists(METADATA_PATH):
 # ===================
 
 # ✅ Load model, index, metadata
-print("📦 Loading model/index/metadata...")
-model = SentenceTransformer(MODEL_NAME)
+
+# model_embed = SentenceTransformer(MODEL_NAME)
 index = faiss.read_index(FAISS_INDEX_PATH)
 
 with open(METADATA_PATH, "r", encoding="utf-8") as f:
@@ -37,40 +36,38 @@ with open(METADATA_PATH, "r", encoding="utf-8") as f:
 
 corpus_texts = [doc["text"] for doc in metadata]
 
-# ✅ TF-IDF vectorizer
-print("🧠 Building TF-IDF vectorizer...")
-tfidf_vectorizer = TfidfVectorizer().fit(corpus_texts)
-corpus_sparse = tfidf_vectorizer.transform(corpus_texts)
-
 
 # ✅ Embedding query
-def embed_dense(text: str) -> np.ndarray:
+def embed_dense(model, text: str) -> np.ndarray:
     vec = model.encode(text, normalize_embeddings=True)
     return np.array(vec, dtype=np.float32).reshape(1, -1)
 
 
 def embed_sparse(text: str):
-    return tfidf_vectorizer.transform([text])
+    print("🧠 Building TF-IDF vectorizer...")
+    tfidf_vectorizer = TfidfVectorizer().fit(corpus_texts)
+    corpus_sparse = tfidf_vectorizer.transform(corpus_texts)
+    return corpus_sparse, tfidf_vectorizer.transform([text])
 
 
 # ✅ Dense search
-def dense_search(query: str, top_k: int):
-    query_vec = embed_dense(query)
+def dense_search(model, query: str, top_k: int):
+    query_vec = embed_dense(model, query)
     scores, indices = index.search(query_vec, top_k)
     return [(int(i), float(s)) for i, s in zip(indices[0], scores[0]) if i >= 0]
 
 
 # ✅ Sparse search
 def sparse_search(query: str, top_k: int):
-    query_sparse = embed_sparse(query)
+    corpus_sparse, query_sparse = embed_sparse(query)
     similarities = cosine_similarity(query_sparse, corpus_sparse)[0]
     top_indices = np.argsort(similarities)[::-1][:top_k]
     return [(int(i), float(similarities[i])) for i in top_indices]
 
 
 # ✅ RRF fusion
-def search_rrf(query: str, top_k: int = TOP_K):
-    dense_res = dense_search(query, top_k * 2)
+def search_rrf(model, query: str, top_k: int = TOP_K):
+    dense_res = dense_search(model, query, top_k * 2)
     sparse_res = sparse_search(query, top_k * 2)
 
     rrf_scores = {}
@@ -98,34 +95,3 @@ def search_rrf(query: str, top_k: int = TOP_K):
 
 
 # ✅ Demo
-import gradio as gr
-
-
-def search_interface(query):
-    results = search_rrf(query)
-    output = ""
-
-    output += (
-        f"🔍 **Query:** {results[0]['text'][:100]}...\n\n"
-        if results
-        else "Không có kết quả."
-    )
-    for idx, r in enumerate(results, 1):
-        output += f"### 🔹 Kết quả {idx} (Score: {r['score']})\n"
-        output += f"📄 **Text**: {r['text'][:500]}...\n"
-        output += f"🌐 **Source**: {r['url']}\n"
-        output += "---\n"
-    return output
-
-
-# Gradio UI
-iface = gr.Interface(
-    fn=search_interface,
-    inputs=gr.Textbox(lines=2, placeholder="Nhập truy vấn..."),
-    outputs=gr.Markdown(),
-    title="🔎 Semantic Search (Hybrid FAISS + TF-IDF)",
-    description="Nhập truy vấn tiếng Việt và xem kết quả từ FAISS + TF-IDF + RRF.",
-)
-
-if __name__ == "__main__":
-    iface.launch()

@@ -1,58 +1,40 @@
 import asyncio
-import json
+import os
 import time
 from typing import List, Optional
 
-import nltk
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import numpy as np
-from dotenv import load_dotenv
+import tiktoken
 from nltk.tokenize import sent_tokenize
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity as cosine_sim
+from sklearn.metrics.pairwise import cosine_similarity
 
-nltk.download("punkt")
-# Load environment variables
-load_dotenv()
-
-# Global variables
+# === Global state ===
 embedding_cache = {}
-sentence_model = None
+encoding = tiktoken.get_encoding("cl100k_base")
 
 
-# ---------------------------------------------------
-# -- Initialize SentenceTransformer --
-# ---------------------------------------------------
-async def initialize_embedding_utils():
-    global sentence_model
-    sentence_model = SentenceTransformer("intfloat/multilingual-e5-large")
-    return {"embedding": "SentenceTransformer - multilingual-e5-large"}
-
-
-async def create_embedding(paragraph: str):
+# === Embedding + similarity ===
+async def create_embedding(model, paragraph: str):
     if paragraph in embedding_cache:
         return embedding_cache[paragraph]
 
-    embedding = await asyncio.to_thread(
-        sentence_model.encode, paragraph, normalize_embeddings=True
-    )
+    embedding = model.encode(paragraph, normalize_embeddings=True)
     embedding = np.array(embedding)
     embedding_cache[paragraph] = embedding
     return embedding
 
 
-# -----------------------------------------------------
-# -- Calculate cosine similarity between two vectors --
-# -----------------------------------------------------
-def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+def cosine_sim(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     vec_a = vec_a.reshape(1, -1)
     vec_b = vec_b.reshape(1, -1)
-    return float(cosine_sim(vec_a, vec_b)[0][0])
+    return float(cosine_similarity(vec_a, vec_b)[0][0])
 
 
-# ---------------------------------------------------------------
-# -- Function to compute similarities across paragraphs --
-# ---------------------------------------------------------------
 async def compute_advanced_similarities(
+    model,
     paragraphs: List[str],
     num_similarity_paragraphs_lookahead: int = 8,
     logging: bool = False,
@@ -61,13 +43,13 @@ async def compute_advanced_similarities(
         return {"similarities": [], "average": 0.0, "variance": 0.0}
 
     embeddings = await asyncio.gather(
-        *[create_embedding(paragraph) for paragraph in paragraphs]
+        *[create_embedding(model, paragraph) for paragraph in paragraphs]
     )
     similarities = []
     similarity_sum = 0
 
     for i in range(len(embeddings) - 1):
-        max_similarity = cosine_similarity(embeddings[i], embeddings[i + 1])
+        max_similarity = cosine_sim(embeddings[i], embeddings[i + 1])
 
         if logging:
             print(f"\nSimilarity scores for paragraph {i}:")
@@ -76,7 +58,7 @@ async def compute_advanced_similarities(
         for j in range(
             i + 2, min(i + num_similarity_paragraphs_lookahead + 1, len(embeddings))
         ):
-            sim = cosine_similarity(embeddings[i], embeddings[j])
+            sim = cosine_sim(embeddings[i], embeddings[j])
             if logging:
                 print(f"Similarity with paragraph {j}: {sim}")
             max_similarity = max(max_similarity, sim)
@@ -84,18 +66,13 @@ async def compute_advanced_similarities(
         similarities.append(max_similarity)
         similarity_sum += max_similarity
 
-    if len(similarities) == 0:
-        return {"similarities": [], "average": 0.0, "variance": 0.0}
-
     average = similarity_sum / len(similarities)
     variance = np.var(similarities)
 
     return {"similarities": similarities, "average": average, "variance": variance}
 
 
-# -----------------------------------------------------------
-# -- Function to dynamically adjust the similarity threshold --
-# -----------------------------------------------------------
+# === Threshold ===
 def adjust_threshold(
     average: float,
     variance: float,
@@ -126,14 +103,7 @@ def adjust_threshold(
     return min(max(adjusted_threshold, lower_bound), upper_bound)
 
 
-# -----------------------------------------------------------
-# -- Function to create chunks of paragraphs based on similarity --
-# -----------------------------------------------------------
-import tiktoken
-
-encoding = tiktoken.get_encoding("cl100k_base")
-
-
+# === Chunking ===
 async def create_chunks(
     paragraphs: List[str],
     similarities: Optional[List[float]],
@@ -207,14 +177,10 @@ def remove_duplicate_chunks(data):
     return filtered_data
 
 
-# -----------------------------------------------------------
-# -- Function to call --
-# -----------------------------------------------------------
-async def extract_chunks_from_paragraph(paragraph: str) -> List[str]:
+# === Public function to use from outside ===
+async def extract_chunks_from_paragraph(model, paragraph: str) -> List[str]:
     start_time = time.time()
     print("🚀 Starting chunking for single paragraph...")
-
-    await initialize_embedding_utils()
 
     if not isinstance(paragraph, str) or not paragraph.strip():
         print("⚠️ Input is empty or not a valid string.")
@@ -226,7 +192,7 @@ async def extract_chunks_from_paragraph(paragraph: str) -> List[str]:
         print("⚠️ No sentences extracted from input.")
         return []
 
-    similarity_results = await compute_advanced_similarities(sentences)
+    similarity_results = await compute_advanced_similarities(model, sentences)
     threshold = adjust_threshold(
         similarity_results["average"], similarity_results["variance"]
     )
@@ -238,90 +204,3 @@ async def extract_chunks_from_paragraph(paragraph: str) -> List[str]:
     print(f"✅ {len(chunks)} chunks extracted from paragraph.")
     print(f"⏱️ Time taken: {time.time() - start_time:.2f} seconds.")
     return chunks
-
-
-# -----------------------------------------------------------
-# -- Main Execution --
-# -----------------------------------------------------------
-from tqdm import tqdm
-
-
-async def main():
-    start_time = time.time()
-    print("🚀 Starting data processing...")
-
-    await initialize_embedding_utils()
-
-    input_file = "NLP/crawl_data/processed_results/final_result/final_unique.json"
-    output_file = "NLP/chunking/sem_len/sem_len.json"
-    skipped_file = "NLP/chunking/sem_len/skipped_urls.txt"
-
-    print("📥 Loading input data...")
-    with open(input_file, "r", encoding="utf-8") as f:
-        raw_data = json.load(f)
-
-    # ✅ Flatten if input is nested list
-    flattened = []
-    for group in raw_data:
-        if isinstance(group, list):
-            flattened.extend(group)
-        else:
-            flattened.append(group)
-
-    print(f"✅ Input flattened. {len(flattened)} documents ready.")
-
-    output_stream = open(output_file, "w", encoding="utf-8", newline="\n")
-    skipped_urls = []
-
-    for doc in tqdm(flattened, desc="📊 Processing documents"):
-        url = doc.get("url", "")
-        raw_paragraphs = doc.get("content", [])
-
-        if not raw_paragraphs:
-            print(f"⚠️ Skipping {url} - No content found.")
-            skipped_urls.append(f"{url} - no content")
-            continue
-
-        sentences = []
-        for para in raw_paragraphs:
-            if isinstance(para, str):
-                sentences.extend(sent_tokenize(para))
-            elif isinstance(para, list):
-                for sub_para in para:
-                    if isinstance(sub_para, str):
-                        sentences.extend(sent_tokenize(sub_para))
-
-        if not sentences:
-            print(f"⚠️ Skipping {url} - No sentences extracted.")
-            skipped_urls.append(f"{url} - no sentences")
-            continue
-
-        similarity_results = await compute_advanced_similarities(sentences)
-        threshold = adjust_threshold(
-            similarity_results["average"], similarity_results["variance"]
-        )
-
-        chunks = await create_chunks(
-            sentences, similarity_results["similarities"], threshold
-        )
-
-        chunk_list = [{"content": chunk} for chunk in chunks]
-        result = {"Url": url, "Chunks": chunk_list}
-
-        json.dump(result, output_stream, ensure_ascii=False)
-        output_stream.write("\n")
-        output_stream.flush()
-
-    output_stream.close()
-
-    # ✅ Save skipped URLs
-    with open(skipped_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(skipped_urls))
-
-    print(f"💾 Output saved to {output_file}")
-    print(f"🗑️ Skipped URLs saved to {skipped_file}")
-    print(f"⏱️ Total execution time: {time.time() - start_time:.2f} seconds.")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
