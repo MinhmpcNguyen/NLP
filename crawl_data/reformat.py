@@ -59,8 +59,8 @@ def reformat_and_deduplicate(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]
 # ✅ MAIN: Load input, process, and save output
 # =============================================
 def main():
-    input_path = "crawl_data/crawl_results/results_ctt.json"
-    output_path = "NLP/crawl_data/processed_results/ctt_output.json"
+    input_path = "crawl_data/crawl_results/results_http_hust.json"
+    output_path = "NLP/crawl_data/processed_results/http_test.json"
 
     with open(input_path, "r", encoding="utf-8") as f:
         data = json.load(f)

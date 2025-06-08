@@ -287,11 +287,11 @@ async def crawl_url(url):
 
 async def main():
     ensure_playwright_installed()
-    start_url = "https://drive.google.com/file/d/1OePEnRakaINDWiISesP719JuHFpX8SWS/view"
+    start_url = "https://hust.edu.vn/vi/tuyen-sinh/dai-hoc/thong-tin-tuyen-sinh-dai-hoc-chinh-quy-nam-2025-651872.html"
     max_depth = 0
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_drive.json")
-    failed_links_file = os.path.join(results_dir, "failed_links_drive.txt")
+    results_file = os.path.join(results_dir, "results_http_hust.json")
+    failed_links_file = os.path.join(results_dir, "failed_links_hut.txt")
 
     os.makedirs(results_dir, exist_ok=True)
     open(failed_links_file, "w", encoding="utf-8").close()

@@ -2,7 +2,7 @@ import json
 import uuid
 
 import numpy as np
-import pinecone
+from pinecone import Pinecone, ServerlessSpec
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
@@ -10,21 +10,30 @@ from tqdm import tqdm
 MODEL_NAME = "intfloat/multilingual-e5-large"
 NDJSON_PATH = "/Users/Yuki/NLP/no_api/chunking/sem_len/sem_len.json"
 PINECONE_INDEX_NAME = "sem-len-index"
-PINECONE_API_KEY = "your-pinecone-api-key"  # 🔐 replace with your key
-PINECONE_ENV = "your-pinecone-environment"  # e.g., "gcp-starter"
+PINECONE_API_KEY = "pcsk_3FE9xx_BzUsMz29JDSGS3Q8mKdTQy16SdtFeiwivhSxAWm9Xwh83fqhHhRBKXvc7FZa9bY"  # 🔐 replace with your key
+PINECONE_CLOUD = "aws"  # or "gcp"
+PINECONE_REGION = "us-east-1"  # ✅ check in Pinecone console
 BATCH_SIZE = 64
 # ===================
 
-# ✅ Init model
+# ✅ Load model
 print(f"📦 Loading model: {MODEL_NAME}")
 model = SentenceTransformer(MODEL_NAME)
 dimension = model.get_sentence_embedding_dimension()
 
-# ✅ Init Pinecone
-pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-if PINECONE_INDEX_NAME not in pinecone.list_indexes():
-    pinecone.create_index(PINECONE_INDEX_NAME, dimension=dimension, metric="cosine")
-index = pinecone.Index(PINECONE_INDEX_NAME)
+# ✅ Initialize Pinecone v3 client
+pc = Pinecone(api_key=PINECONE_API_KEY)
+
+# ✅ Create index if not exists
+if PINECONE_INDEX_NAME not in pc.list_indexes().names():
+    pc.create_index(
+        name=PINECONE_INDEX_NAME,
+        dimension=dimension,
+        metric="cosine",
+        spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
+    )
+
+index = pc.Index(PINECONE_INDEX_NAME)
 
 
 # ✅ Helper: encode + normalize

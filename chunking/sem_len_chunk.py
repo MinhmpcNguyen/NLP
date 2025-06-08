@@ -3,11 +3,14 @@ import json
 import time
 from typing import List, Optional
 
+import nltk
 import numpy as np
 from dotenv import load_dotenv
+from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity as cosine_sim
 
+nltk.download("punkt")
 # Load environment variables
 load_dotenv()
 
@@ -205,24 +208,70 @@ def remove_duplicate_chunks(data):
 
 
 # -----------------------------------------------------------
+# -- Function to call --
+# -----------------------------------------------------------
+async def extract_chunks_from_crawl(input_file: str) -> List[str]:
+    start_time = time.time()
+    print("🚀 Starting data processing...")
+
+    await initialize_embedding_utils()
+
+    print("📥 Loading input data...")
+    with open(input_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    print(f"✅ Input data loaded in {time.time() - start_time:.2f} seconds.")
+
+    all_chunks = []
+
+    for doc in tqdm(data, desc="📊 Processing documents"):
+        raw_paragraphs = doc.get("content", [])
+        if not raw_paragraphs:
+            print(f"⚠️ Skipping {doc['url']} - No content found.")
+            continue
+
+        sentences = []
+        for para in raw_paragraphs:
+            if isinstance(para, str):
+                sentences.extend(sent_tokenize(para))
+            elif isinstance(para, list):
+                for sub_para in para:
+                    if isinstance(sub_para, str):
+                        sentences.extend(sent_tokenize(sub_para))
+
+        if not sentences:
+            print(f"⚠️ Skipping {doc['url']} - No sentences extracted.")
+            continue
+
+        similarity_results = await compute_advanced_similarities(sentences)
+        threshold = adjust_threshold(
+            similarity_results["average"], similarity_results["variance"]
+        )
+
+        chunks = await create_chunks(
+            sentences, similarity_results["similarities"], threshold
+        )
+
+        all_chunks.extend(chunks)
+
+    print(f"✅ Total {len(all_chunks)} chunks extracted.")
+    print(f"⏱️ Execution time: {time.time() - start_time:.2f} seconds.")
+    return all_chunks
+
+
+# -----------------------------------------------------------
 # -- Main Execution --
 # -----------------------------------------------------------
 from tqdm import tqdm
 
 
 async def main():
-    import nltk
-    from nltk.tokenize import sent_tokenize
-
-    nltk.download("punkt")
-
     start_time = time.time()
     print("🚀 Starting data processing...")
 
     await initialize_embedding_utils()
 
-    input_file = "NLP/crawl_data/processed_results/final_result/merged_output.json"
-    output_file = "NLP/chunking/sem_len/sem_len.json"
+    input_file = "NLP/crawl_data/processed_results/http_test.json"
+    output_file = "NLP/chunking/http_hust.json"
 
     print("📥 Loading input data...")
     with open(input_file, "r", encoding="utf-8") as f:
