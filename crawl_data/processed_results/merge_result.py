@@ -30,9 +30,9 @@ def merge_url_data(data1: List[Dict], data2: List[Dict]) -> List[Dict]:
 # ✅ MAIN: Gộp file1 + file2 thành file output
 # =======================================
 def main():
-    file1 = "NLP/crawl_data/processed_results/main_web_output.json"
-    file2 = "NLP/crawl_data/processed_results/ctt_output.json"
-    output_file = "NLP/crawl_data/processed_results/final_result/merged_output.json"
+    file1 = "NLP/crawl_data/processed_results/ts.json"
+    file2 = "NLP/crawl_data/processed_results/final_result/merged_output1.json"
+    output_file = "NLP/crawl_data/processed_results/final_result/final_merge.json"
 
     with open(file1, "r", encoding="utf-8") as f1:
         data1 = json.load(f1)

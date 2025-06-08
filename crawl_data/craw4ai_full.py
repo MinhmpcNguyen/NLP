@@ -17,6 +17,7 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from docx import Document
 from pdf2image import convert_from_path
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from crawl_data.process_markdown import *
 
 
@@ -288,11 +289,11 @@ async def crawl_url(url):
 
 async def main():
     ensure_playwright_installed()
-    start_url = "⁦https://vi.wikipedia.org/wiki/Genshin_Impact⁩"
-    max_depth = 0
+    start_url = "https://soict.hust.edu.vn/category/gioi-thieu"
+    max_depth = 10
     results_dir = "crawl_data/crawl_results"
-    results_file = os.path.join(results_dir, "results_drive3.json")
-    failed_links_file = os.path.join(results_dir, "failed_links_drive.txt")
+    results_file = os.path.join(results_dir, "results_soict.json")
+    failed_links_file = os.path.join(results_dir, "failed_links_soict.txt")
 
     os.makedirs(results_dir, exist_ok=True)
     open(failed_links_file, "w", encoding="utf-8").close()

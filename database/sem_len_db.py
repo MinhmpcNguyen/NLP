@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 # ==== ✅ CONFIG ====
 MODEL_NAME = "intfloat/multilingual-e5-large"
-NDJSON_PATH = "/Users/Yuki/NLP/no_api/chunking/sem_len/sem_len.json"
+NDJSON_PATH = "NLP/chunking/sem_len/sem_len.json"
 FAISS_INDEX_PATH = "NLP/save_local_db/sem_len/vector_index.faiss"
 METADATA_PATH = "NLP/save_local_db/sem_len/vector_metadata.json"
 BATCH_SIZE = 64

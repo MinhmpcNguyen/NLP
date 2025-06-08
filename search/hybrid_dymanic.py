@@ -53,21 +53,21 @@ def sparse_search(query: str, top_k: int):
 
 
 # ✅ Dynamic threshold
-def determine_threshold(similarities):
+def determine_dynamic_top_k(similarities, base_k=5):
     mean_sim = np.mean(similarities)
-    std_sim = np.std(similarities)
-    skew = (3 * (mean_sim - np.median(similarities))) / (std_sim + 1e-9)
-    gm = np.exp(np.mean(np.log(similarities + 1e-9)))
-    if abs(skew) < 0.5:
-        return mean_sim
-    elif skew > 0.5:
-        return gm
-    elif skew < -0.5:
-        return gm - 0.5 * std_sim
-    else:
-        q3 = np.percentile(similarities, 75)
-        q1 = np.percentile(similarities, 25)
-        return q3 + 1.5 * (q3 - q1)
+    std_dev_sim = np.std(similarities)
+    skewness = (3 * (mean_sim - np.median(similarities))) / (std_dev_sim + 1e-9)
+    n = len(similarities)
+
+    if abs(skewness) < 0.5:
+        # Gần đối xứng → giữ nguyên
+        return min(n, base_k)
+    elif skewness > 0.5:
+        # Skew dương → tăng k để giữ nhiều điểm cao hiếm
+        return min(n, base_k + 2)
+    elif skewness < -0.5:
+        # Skew âm → giảm k vì điểm cao nhiều hơn
+        return min(n, max(base_k - 1, 1))
 
 
 # ✅ Reciprocal Rank Fusion

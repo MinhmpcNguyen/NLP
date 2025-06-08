@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 # ==== ✅ CONFIG ====
-NDJSON_PATH = "NLP/chunking/sem_len/sem_len.json"
+NDJSON_PATH = "NLP/chunking/length/len.json"
 FAISS_INDEX_PATH = "NLP/save_local_db/len/vector_index.faiss"
 METADATA_PATH = "NLP/save_local_db/len/vector_metadata.json"
 MODEL_NAME = "intfloat/multilingual-e5-large"
@@ -32,29 +32,30 @@ def get_embedding(text: str):
 
 
 # ✅ Load và lưu vector + metadata
-def upload_chunks_to_faiss(ndjson_path: str):
-    with open(ndjson_path, "r", encoding="utf-8") as f:
-        for line in tqdm(f, desc="🚀 Embedding & Saving"):
-            doc = json.loads(line)
-            url = doc.get("Url", "")
-            chunks = doc.get("Chunks", [])
+def upload_chunks_to_faiss(json_path: str):
+    with open(json_path, "r", encoding="utf-8") as f:
+        all_docs = json.load(f)  # ✅ load full JSON list
 
-            for i, chunk in enumerate(chunks):
-                text = chunk.get("content", "").strip()
-                if not text:
-                    continue
+    for doc in tqdm(all_docs, desc="🚀 Embedding & Saving"):
+        url = doc.get("url", "")
+        chunks = doc.get("chunks", [])
 
-                vec = get_embedding(text)
-                index.add(np.expand_dims(vec, axis=0))
+        for i, chunk in enumerate(chunks):
+            text = chunk.get("content", "").strip()
+            if not text:
+                continue
 
-                metadata_store.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "url": url,
-                        "text": text,
-                        "chunk_index": i,
-                    }
-                )
+            vec = get_embedding(text)
+            index.add(np.expand_dims(vec, axis=0))
+
+            metadata_store.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "url": url,
+                    "text": text,
+                    "chunk_index": i,
+                }
+            )
 
 
 # ✅ Run & Save

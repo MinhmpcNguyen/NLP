@@ -1,69 +1,107 @@
 import re
+
 import markdown
 from bs4 import BeautifulSoup
 
 
-# Process paragraph text
 def process_text(txt: str) -> list:
-    # Split paragraph by highlight part `_**`
-    h_p = re.split(r'_\*\*', txt.strip())
-    t = []
-    
-    for text in h_p:
+    """Processes markdown-style annotated text into key-value pairs."""
+    segments = re.split(r"_\*\*", txt.strip())
+    result = []
+
+    for segment in segments:
         try:
-            # Split each section into key-value pairs at `**_`
-            matches = re.split(r'\*\*_\n', text, maxsplit=1)
-            key = matches[0].strip()
-            
-            # If there's no value, store raw text instead
-            if len(matches) <= 1 or not matches[1].strip():
-                section = text.strip()  # Store full raw text
+            parts = re.split(r"\*\*_\n", segment, maxsplit=1)
+            key = parts[0].strip()
+
+            if len(parts) <= 1 or not parts[1].strip():
+                processed = segment.strip()
             else:
-                value = matches[1].strip()
-                section = {key: value}
+                value = parts[1].strip()
+                processed = {key: value}
         except Exception as e:
-            section = {"Error": str(e), "RawText": text}  # Error handling
-        
-        t.append(section)
-    
-    return t
+            processed = {"Error": str(e), "RawText": segment}
 
-# Process full markdown
+        result.append(processed)
+
+    return result
+
+
 def preprocess_markdown(md_text: str) -> list:
-    # Check if markdown contains headers (##)
-    if '##' not in md_text:
+    """Converts structured markdown into a list of dictionaries by headers."""
+    if "##" not in md_text:
         return process_text(md_text)
-    
-    
-    # Split by "##" but keep meaningful content
-    raw_sections = re.split(r'##\s*', md_text)
-    
-    md = []
 
-    for section in raw_sections:
-        d = {}
+    sections = re.split(r"##\s*", md_text)
+    result = []
+
+    for section in sections:
         section = section.strip()
-        if not section:  # Skip empty sections
+        if not section:
             continue
 
-        # Extract the first line as the header, remaining as content
         parts = section.split("\n", 1)
-        if len(parts) == 2:
-            header, content = parts[0].strip(), parts[1].strip()
-        else:
-            header, content = parts[0].strip(), ""
+        header = parts[0].strip()
+        content = parts[1].strip() if len(parts) == 2 else ""
 
-        # Ignore completely empty headers
         if not header:
-            continue  
+            continue
 
-        # Remove asterisks (**) from headers
-        clean_header = re.sub(r'\*+', '', header).strip()
+        clean_header = re.sub(r"\*+", "", header).strip()
+        clean_content = (
+            BeautifulSoup(markdown.markdown(content), "html.parser")
+            .get_text(separator=" ")
+            .strip()
+        )
 
-        # Convert markdown content to plain text
-        clean_content = BeautifulSoup(markdown.markdown(content), "html.parser").get_text(separator=" ").strip()
-        d[clean_header] = process_text(clean_content)
-        md.append(d)
+        result.append({clean_header: process_text(clean_content)})
 
-    return md
+    return result
 
+
+def divide_to_paragraphs(url_content: str) -> list:
+    """Splits Markdown content into logical sections, preserving pre-header content."""
+    pattern = re.compile(r"^(#{1,})\s*(.*)", re.MULTILINE)
+    lines = url_content.split("\n")
+    sections = []
+
+    first_header_index = next(
+        (i for i, line in enumerate(lines) if pattern.match(line)), None
+    )
+
+    if first_header_index and first_header_index > 0:
+        pre_header_content = [
+            line for line in lines[:first_header_index] if line.strip()
+        ]
+        if pre_header_content:
+            sections.append("\n".join(pre_header_content))
+
+    current_headers = []
+    current_content = []
+
+    start_index = first_header_index if first_header_index is not None else 0
+
+    for i in range(start_index, len(lines)):
+        line = lines[i]
+        match = pattern.match(line)
+
+        if match:
+            if current_content and current_headers:
+                section = "\n".join(current_headers) + "\n" + "\n".join(current_content)
+                sections.append(section)
+                current_content = []
+                current_headers = []
+
+            current_headers = [line]
+        else:
+            if line.strip():
+                current_content.append(line)
+
+    if current_headers or current_content:
+        if current_headers:
+            section = "\n".join(current_headers) + "\n" + "\n".join(current_content)
+        else:
+            section = "\n".join(current_content)
+        sections.append(section)
+
+    return sections

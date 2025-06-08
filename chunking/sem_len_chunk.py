@@ -210,52 +210,34 @@ def remove_duplicate_chunks(data):
 # -----------------------------------------------------------
 # -- Function to call --
 # -----------------------------------------------------------
-async def extract_chunks_from_crawl(input_file: str) -> List[str]:
+async def extract_chunks_from_paragraph(paragraph: str) -> List[str]:
     start_time = time.time()
-    print("🚀 Starting data processing...")
+    print("🚀 Starting chunking for single paragraph...")
 
     await initialize_embedding_utils()
 
-    print("📥 Loading input data...")
-    with open(input_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    print(f"✅ Input data loaded in {time.time() - start_time:.2f} seconds.")
+    if not isinstance(paragraph, str) or not paragraph.strip():
+        print("⚠️ Input is empty or not a valid string.")
+        return []
 
-    all_chunks = []
+    sentences = sent_tokenize(paragraph)
 
-    for doc in tqdm(data, desc="📊 Processing documents"):
-        raw_paragraphs = doc.get("content", [])
-        if not raw_paragraphs:
-            print(f"⚠️ Skipping {doc['url']} - No content found.")
-            continue
+    if not sentences:
+        print("⚠️ No sentences extracted from input.")
+        return []
 
-        sentences = []
-        for para in raw_paragraphs:
-            if isinstance(para, str):
-                sentences.extend(sent_tokenize(para))
-            elif isinstance(para, list):
-                for sub_para in para:
-                    if isinstance(sub_para, str):
-                        sentences.extend(sent_tokenize(sub_para))
+    similarity_results = await compute_advanced_similarities(sentences)
+    threshold = adjust_threshold(
+        similarity_results["average"], similarity_results["variance"]
+    )
 
-        if not sentences:
-            print(f"⚠️ Skipping {doc['url']} - No sentences extracted.")
-            continue
+    chunks = await create_chunks(
+        sentences, similarity_results["similarities"], threshold
+    )
 
-        similarity_results = await compute_advanced_similarities(sentences)
-        threshold = adjust_threshold(
-            similarity_results["average"], similarity_results["variance"]
-        )
-
-        chunks = await create_chunks(
-            sentences, similarity_results["similarities"], threshold
-        )
-
-        all_chunks.extend(chunks)
-
-    print(f"✅ Total {len(all_chunks)} chunks extracted.")
-    print(f"⏱️ Execution time: {time.time() - start_time:.2f} seconds.")
-    return all_chunks
+    print(f"✅ {len(chunks)} chunks extracted from paragraph.")
+    print(f"⏱️ Time taken: {time.time() - start_time:.2f} seconds.")
+    return chunks
 
 
 # -----------------------------------------------------------
@@ -270,20 +252,34 @@ async def main():
 
     await initialize_embedding_utils()
 
-    input_file = "NLP/crawl_data/processed_results/http_test.json"
-    output_file = "NLP/chunking/http_hust.json"
+    input_file = "NLP/crawl_data/processed_results/final_result/final_unique.json"
+    output_file = "NLP/chunking/sem_len/sem_len.json"
+    skipped_file = "NLP/chunking/sem_len/skipped_urls.txt"
 
     print("📥 Loading input data...")
     with open(input_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    print(f"✅ Input data loaded in {time.time() - start_time:.2f} seconds.")
+        raw_data = json.load(f)
+
+    # ✅ Flatten if input is nested list
+    flattened = []
+    for group in raw_data:
+        if isinstance(group, list):
+            flattened.extend(group)
+        else:
+            flattened.append(group)
+
+    print(f"✅ Input flattened. {len(flattened)} documents ready.")
 
     output_stream = open(output_file, "w", encoding="utf-8", newline="\n")
+    skipped_urls = []
 
-    for doc in tqdm(data, desc="📊 Processing documents"):
+    for doc in tqdm(flattened, desc="📊 Processing documents"):
+        url = doc.get("url", "")
         raw_paragraphs = doc.get("content", [])
+
         if not raw_paragraphs:
-            print(f"⚠️ Skipping {doc['url']} - No content found.")
+            print(f"⚠️ Skipping {url} - No content found.")
+            skipped_urls.append(f"{url} - no content")
             continue
 
         sentences = []
@@ -296,7 +292,8 @@ async def main():
                         sentences.extend(sent_tokenize(sub_para))
 
         if not sentences:
-            print(f"⚠️ Skipping {doc['url']} - No sentences extracted.")
+            print(f"⚠️ Skipping {url} - No sentences extracted.")
+            skipped_urls.append(f"{url} - no sentences")
             continue
 
         similarity_results = await compute_advanced_similarities(sentences)
@@ -309,14 +306,20 @@ async def main():
         )
 
         chunk_list = [{"content": chunk} for chunk in chunks]
-        result = {"Url": doc["url"], "Chunks": chunk_list}
+        result = {"Url": url, "Chunks": chunk_list}
 
         json.dump(result, output_stream, ensure_ascii=False)
         output_stream.write("\n")
         output_stream.flush()
 
     output_stream.close()
-    print(f"💾 Streaming output saved to {output_file}")
+
+    # ✅ Save skipped URLs
+    with open(skipped_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(skipped_urls))
+
+    print(f"💾 Output saved to {output_file}")
+    print(f"🗑️ Skipped URLs saved to {skipped_file}")
     print(f"⏱️ Total execution time: {time.time() - start_time:.2f} seconds.")
 
 
