@@ -11,12 +11,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==== ✅ CONFIG ====
-MODEL_NAME = "intfloat/multilingual-e5-large"
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 TOP_K = 5
 
 # ✅ Lấy đường dẫn tuyệt đối đến thư mục hiện tại
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DB_PATH = os.path.join(CURRENT_DIR, "save_local_db", "sem_len")
+BASE_DB_PATH = os.path.join(CURRENT_DIR, "save_local_db_copy", "sem_len")
 FAISS_INDEX_PATH = os.path.join(BASE_DB_PATH, "vector_index.faiss")
 METADATA_PATH = os.path.join(BASE_DB_PATH, "vector_metadata.json")
 

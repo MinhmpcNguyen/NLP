@@ -2,14 +2,40 @@ import asyncio
 import os
 import random
 import time
+import torch 
 
 import streamlit as st
 import torch
 from google import genai
+from transformers import AutoTokenizer, BitsAndBytesConfig
+from peft import AutoPeftModelForCausalLM
 
-from gemini_chatbot import answer_query
+from gemini_chatbot import answer_query as gemini_answer_query
+from vinallama_qa import answer_query as vinallama_answer_query
 
 print("Libraries loaded successfully")
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+vinallama_model = "model/vinallama-7b-finetuned-25-percent"
+    
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit = True,
+    bnb_4bit_use_double_quant = False,
+    bnb_4bit_quant_type = "nf4",
+    bnb_4bit_compute_dtype = torch.float16
+)
+
+tokenizer = AutoTokenizer.from_pretrained(vinallama_model)
+
+llama2_model = AutoPeftModelForCausalLM.from_pretrained(
+    vinallama_model,
+    quantization_config = bnb_config,
+    low_cpu_mem_usage = True,
+    return_dict = True,
+    torch_dtype=torch.float16,
+    device_map=device
+)
+
 st.set_page_config(
     page_title="HUST Assistant",
     initial_sidebar_state="collapsed",
@@ -17,13 +43,6 @@ st.set_page_config(
 
 gemini_api_key = os.getenv("GEMINI_API_KEY") or "your-default-api-key"
 
-
-# def chat(input, max_new_tokens=100):
-#     """Generate response"""
-#     input_text = format_input(input)
-
-#     response = "Bot mimics your message", input_text
-#     return response, "10s"
 
 st.markdown(
     """
@@ -54,7 +73,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-models = ["vinllama-7B", "vietnamese Llama2-7B", "Gemini_RAG"]
+
+models = ["Gemini_RAG", "VinaLlama-7b"]
 st.session_state["model"] = st.sidebar.selectbox("Select model", models, index=0)
 
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
@@ -70,8 +90,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "user_input" not in st.session_state:
-    st.session_state.user_input = ""
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -84,6 +102,12 @@ if input_text := st.chat_input():
         st.session_state.chat_history.append({"role": "user", "content": input_text})
 
     with st.chat_message("bot"):
-        response_text = asyncio.run(answer_query(input_text))
+        if st.session_state["model"] == "Gemini_RAG":
+            response_text = asyncio.run(gemini_answer_query(input_text))
+        elif st.session_state["model"] == "vinallama-7b":
+            response_text = vinallama_answer_query(input_text, model=llama2_model, tokenizer=tokenizer)    
+        else:
+            response_text = "❌ Model not supported."
+
         st.markdown(response_text)
         st.session_state.messages.append({"role": "bot", "content": response_text})

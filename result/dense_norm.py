@@ -8,10 +8,10 @@ from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
 
 # === Config ===
-MODEL_NAME = "intfloat/multilingual-e5-large"
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 CSV_PATH = "crawl_data/GT_Q_A_Context.csv"  # đường dẫn file GT
-FAISS_INDEX_PATH = "NLP/save_local_db/sem_len/vector_index.faiss"
-METADATA_PATH = "NLP/save_local_db/sem_len/vector_metadata.json"
+FAISS_INDEX_PATH = "NLP/save_local_db_copy/sem_len/vector_index.faiss"
+METADATA_PATH = "NLP/save_local_db_copy/sem_len/vector_metadata.json"
 TOP_K = 5
 SIM_THRESHOLD = 0.80
 OUTPUT_CSV = "crawl_data/retrieval_result_dense_norm.csv"
@@ -62,18 +62,18 @@ for _, row in tqdm(df.iterrows(), total=len(df)):
 
     retrieved_embs = [embed(t) for t in top_k_texts if embed(t) is not None]
     if not retrieved_embs:
-        avg_sim = 0.0
+        max_sim = 0.0
     else:
         sims = [float(util.cos_sim(true_emb, r)[0][0]) for r in retrieved_embs]
-        avg_sim = np.mean(sims)
+        max_sim = np.mean(sims)
 
-    is_correct = "Correct" if avg_sim >= SIM_THRESHOLD else "Incorrect"
+    is_correct = "Correct" if max_sim >= SIM_THRESHOLD else "Incorrect"
 
     results.append(
         {
             "Question": question,
             "Context": true_context,
-            "avg_similarity": round(avg_sim, 4),
+            "avg_similarity": round(max_sim, 4),
             "Correctness": is_correct,
             "Top_k_texts": " ||| ".join(top_k_texts),
         }
