@@ -48,6 +48,7 @@ def is_vietnamese(text):
 
 def is_valid_text(text):
     invalid_keywords = [
+        "# Not Found",
         "not found",
         "404",
         "chưa kích hoạt",
@@ -108,10 +109,12 @@ def search_rrf(model, query: str, top_k: int = TOP_K, keyword_boost: float = 0.5
     for rank, (idx, _) in enumerate(sparse_res):
         rrf_scores[idx] = rrf_scores.get(idx, 0) + 1 / (rank + 1)
 
-    sorted_rrf = sorted(rrf_scores.items(), key=itemgetter(1), reverse=True)
+    # Sắp xếp tạm để lấy metadata
+    sorted_rrf = sorted(rrf_scores.items(), key=itemgetter(1), reverse=True)[
+        : top_k * 4
+    ]
 
-    filtered_results = []
-    fallback_results = []
+    results = []
 
     for idx, score in sorted_rrf:
         meta = metadata[idx]
@@ -119,25 +122,39 @@ def search_rrf(model, query: str, top_k: int = TOP_K, keyword_boost: float = 0.5
         item = {
             "id": meta["id"],
             "text": text,
-            "score": score,
+            "score": score,  # sẽ cộng boost và normalize sau
             "chunk_index": meta.get("chunk_index", -1),
             "url": meta.get("url", []),
         }
+        results.append(item)
 
-        if is_vietnamese(text) and is_valid_text(text):
-            filtered_results.append(item)
-        else:
-            fallback_results.append(item)
-
-        if len(filtered_results) >= top_k:
-            break
-
-    if len(filtered_results) < top_k:
-        filtered_results.extend(fallback_results[: top_k - len(filtered_results)])
-
-    for item in filtered_results:
+    # Cộng boost nếu có từ khóa
+    for item in results:
         if any(kw in item["text"].lower() for kw in query_keywords):
             item["score"] += keyword_boost
-        item["score"] = round(item["score"], 4)
 
-    return sorted(filtered_results, key=lambda x: x["score"], reverse=True)
+    # Normalize theo max_possible_score = 2.0
+    max_possible_score = 2.0
+    for item in results:
+        item["score"] = round(item["score"] / max_possible_score, 4)
+
+    # ✅ Lọc những đoạn có score >= 0.5
+    filtered_results = [
+        item
+        for item in results
+        if item["score"] >= 0.5
+        and is_vietnamese(item["text"])
+        and is_valid_text(item["text"])
+    ]
+
+    # Nếu thiếu, bổ sung từ fallback (không đủ điều kiện lọc)
+    if len(filtered_results) < top_k:
+        fallback_results = [
+            item
+            for item in results
+            if item["score"] >= 0.5 and (item not in filtered_results)
+        ]
+        filtered_results.extend(fallback_results[: top_k - len(filtered_results)])
+
+    # Trả về top_k kết quả tốt nhất
+    return sorted(filtered_results[:top_k], key=lambda x: x["score"], reverse=True)
