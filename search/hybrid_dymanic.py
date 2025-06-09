@@ -53,7 +53,7 @@ def sparse_search(query: str, top_k: int):
 
 
 # ✅ Dynamic threshold
-def determine_dynamic_top_k(similarities, base_k=5):
+def determine_threshold(similarities, base_k=5):
     mean_sim = np.mean(similarities)
     std_dev_sim = np.std(similarities)
     skewness = (3 * (mean_sim - np.median(similarities))) / (std_dev_sim + 1e-9)
