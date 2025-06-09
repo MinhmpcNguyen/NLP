@@ -1,6 +1,7 @@
 import json
 import os
 from operator import itemgetter
+from typing import Any
 
 import faiss
 import numpy as np
@@ -65,7 +66,6 @@ def sparse_search(query: str, top_k: int):
     return [(int(i), float(similarities[i])) for i in top_indices]
 
 
-# ✅ RRF fusion
 def search_rrf(model, query: str, top_k: int = TOP_K):
     dense_res = dense_search(model, query, top_k * 2)
     sparse_res = sparse_search(query, top_k * 2)
@@ -76,7 +76,16 @@ def search_rrf(model, query: str, top_k: int = TOP_K):
     for rank, (idx, _) in enumerate(sparse_res):
         rrf_scores[idx] = rrf_scores.get(idx, 0) + 1 / (rank + 1)
 
-    sorted_rrf = sorted(rrf_scores.items(), key=itemgetter(1), reverse=True)[:top_k]
+    max_possible_score = 1 / 1 + 1 / 1  # 2.0
+    normalized_scores = {
+        idx: score / max_possible_score for idx, score in rrf_scores.items()
+    }
+
+    sorted_rrf = sorted(
+        [(idx, score) for idx, score in normalized_scores.items() if score > 0.5],
+        key=itemgetter(1),
+        reverse=True,
+    )[:top_k]
 
     results = []
     for idx, score in sorted_rrf:
