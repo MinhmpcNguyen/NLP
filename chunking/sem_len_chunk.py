@@ -178,29 +178,38 @@ def remove_duplicate_chunks(data):
 
 
 # === Public function to use from outside ===
-async def extract_chunks_from_paragraph(model, paragraph: str) -> List[str]:
+async def extract_chunks_from_paragraphs(model, paragraphs: List[str]) -> List[str]:
     start_time = time.time()
-    print("🚀 Starting chunking for single paragraph...")
+    print("🚀 Starting chunking for multiple paragraphs...")
 
-    if not isinstance(paragraph, str) or not paragraph.strip():
-        print("⚠️ Input is empty or not a valid string.")
+    if not isinstance(paragraphs, list) or not all(
+        isinstance(p, str) for p in paragraphs
+    ):
+        print("⚠️ Input is not a valid list of strings.")
         return []
 
-    sentences = sent_tokenize(paragraph)
+    # Gộp tất cả câu từ các đoạn
+    sentences = []
+    for para in paragraphs:
+        para = para.strip()
+        if para:
+            sentences.extend(sent_tokenize(para))
 
     if not sentences:
-        print("⚠️ No sentences extracted from input.")
+        print("⚠️ No valid sentences extracted from input.")
         return []
 
+    # Tính toán độ tương đồng
     similarity_results = await compute_advanced_similarities(model, sentences)
     threshold = adjust_threshold(
         similarity_results["average"], similarity_results["variance"]
     )
 
+    # Chunking
     chunks = await create_chunks(
         sentences, similarity_results["similarities"], threshold
     )
 
-    print(f"✅ {len(chunks)} chunks extracted from paragraph.")
-    print(f"⏱️ Time taken: {time.time() - start_time:.2f} seconds.")
+    print(f"{len(chunks)} chunks extracted from paragraphs.")
+    print(f"Time taken: {time.time() - start_time:.2f} seconds.")
     return chunks

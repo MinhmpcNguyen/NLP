@@ -23,8 +23,7 @@ def make_rag_prompt_vi(query, relevant_passage):
 
 
 def make_interet_prompt_vi(query, search):
-    relevant_passage = " ".join(search)
-    escaped = relevant_passage.replace("'", "").replace('"', "").replace("\n", " ")
+    escaped = search.replace("'", "").replace('"', "").replace("\n", " ")
     prompt = CHATBOT_PROMPT.format(query=query, relevant_passage=escaped)
 
     return prompt
@@ -43,7 +42,7 @@ def generate_content_with_gemini(
     return response.text
 
 
-async def answer_query(query: str, top_k: int = 5, rag_threshold: float = 0.2):
+async def answer_query(query: str, top_k: int = 5, crawl: bool = False):
     global model
     global api_key
     rag_results = search_rrf(model, query, top_k=top_k)
@@ -62,16 +61,21 @@ async def answer_query(query: str, top_k: int = 5, rag_threshold: float = 0.2):
         if should_fallback:
             print("Falling back to Internet Search...")
             try:
-                search_results = await get_interest_search(query, crawl=False)
+                search_results = await get_interest_search(query, crawl=crawl)
                 if search_results:
-                    internet_prompt = make_interet_prompt_vi(query, search_results)
+                    all_content = ""
+                    for url, content in search_results.items():
+                        all_content += content
+                    internet_prompt = make_interet_prompt_vi(query, all_content)
+                    print(f"Internet prompt: {internet_prompt}")
                     internet_response = generate_content_with_gemini(
                         internet_prompt, api_key=api_key
                     )
-                    return internet_response
+                    return internet_response, search_results
                 else:
                     return "Xin lỗi, tôi không thể tìm thấy thông tin về câu hỏi này."
             except Exception as e:
+                print(f"Error during internet search: {e}")
                 return "Đã xảy ra lỗi khi tìm kiếm thông tin."
         else:
             return response
@@ -80,26 +84,29 @@ async def answer_query(query: str, top_k: int = 5, rag_threshold: float = 0.2):
         # No RAG results, fallback immediately
         print("No RAG results, falling back to Internet Search...")
         try:
-            search_results = await get_interest_search(query, crawl=False)
+            search_results = await get_interest_search(query, crawl=crawl)
             if search_results:
-                internet_prompt = make_interet_prompt_vi(query, search_results)
+                all_content = ""
+                for url, content in search_results.items():
+                    all_content += content
+                internet_prompt = make_interet_prompt_vi(query, all_content)
+                print(f"Internet prompt: {internet_prompt}")
                 internet_response = generate_content_with_gemini(
                     internet_prompt, api_key=api_key
                 )
-                return internet_response
+                return internet_response, search_results
             else:
-                print("No internet search results found")
                 return "Xin lỗi, tôi không thể tìm thấy thông tin về câu hỏi này."
         except Exception as e:
-            print(f"Error in internet search: {e}")
+            print(f"Error during internet search: {e}")
             return "Đã xảy ra lỗi khi tìm kiếm thông tin."
 
 
 if __name__ == "__main__":
 
     async def main():
-        query = "Các phương thức xét tuyển Bách Khoa 2025"
-        response_text = await answer_query(query)
+        query = "Ngày 11/06/2025 lịch tuần của Đại học Bách khoa Hà Nội có sự kiện gì không?"
+        response_text, search_results = await answer_query(query, crawl=True)
         print(response_text)
 
     asyncio.run(main())

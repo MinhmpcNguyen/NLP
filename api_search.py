@@ -11,12 +11,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ==== ✅ CONFIG ====
-MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME = "intfloat/multilingual-e5-large"
 TOP_K = 5
 
 # ✅ Lấy đường dẫn tuyệt đối đến thư mục hiện tại
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DB_PATH = os.path.join(CURRENT_DIR, "save_local_db_copy", "sem_len")
+BASE_DB_PATH = os.path.join(CURRENT_DIR, "save_local_db", "sem_len")
 FAISS_INDEX_PATH = os.path.join(BASE_DB_PATH, "vector_index.faiss")
 METADATA_PATH = os.path.join(BASE_DB_PATH, "vector_metadata.json")
 
@@ -159,3 +159,13 @@ def search_rrf(model, query: str, top_k: int = TOP_K, keyword_boost: float = 0.5
 
     # Trả về top_k kết quả tốt nhất
     return sorted(filtered_results[:top_k], key=lambda x: x["score"], reverse=True)
+
+
+if __name__ == "__main__":
+    query = "giám đốc đại học bách khoa hà nội qua các thời kì"
+    results = search_rrf(model, query, top_k=TOP_K)
+    print(f"Results for query '{query}':")
+    for result in results:
+        print(
+            f"ID: {result['id']}, Score: {result['score']}, Text: {result['text'][:100]}..."
+        )  # Chỉ in 100 ký tự đầu tiên
