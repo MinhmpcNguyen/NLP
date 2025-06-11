@@ -1,17 +1,12 @@
 import streamlit as st
 
-def gemini_response(input_text, num_result=10):
-    response = "Đây là câu trả lời từ HUST Assistant cho câu hỏi của bạn."
-    top_result = [
-        {"url": "https://hust.edu.vn", "data": "Trang chủ của Đại học Bách Khoa Hà Nội."},
-        {"url": "https://ctt-daotao.hust.edu.vn", "data": "Cổng thông tin đào tạo của sinh viên."}
-    ]
-    return response, top_result
+from gemini_chatbot import answer_query as gemini_answer_query
 
 st.set_page_config(
     page_title="HUST Assistant",
     initial_sidebar_state="expanded",
 )
+
 with st.sidebar:
     models = ["Gemini_RAG", "VinaLlama-7b"]
     selected_model = st.selectbox("Chọn mô hình", models, index=0)
@@ -37,7 +32,7 @@ st.markdown(
             border-bottom: 3px solid #B71C1C;
         }
         .main-container {
-            padding-top: 60px;
+            padding-top: 70px;
         }
     </style>
     <div class="fixed-title">HUST Assitant</div>
@@ -51,15 +46,13 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "top_results" not in st.session_state:
-    st.session_state.top_results = []
-if "see_top_results" not in st.session_state:
-    st.session_state.see_top_results = False
+if "search_results" not in st.session_state:
+    st.session_state.search_results = []
+if "see_search_results" not in st.session_state:
+    st.session_state.see_search_results = False
+if "crawl" not in st.session_state:
+    st.session_state.crawl = False
 
-
-
-
-    
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -73,9 +66,9 @@ if input_text := st.chat_input():
 
     with st.chat_message("bot"):
         if st.session_state["model"] == "Gemini_RAG":
-            response_text, top_results = gemini_response(input_text)
+            response_text, search_results = gemini_answer_query(input_text, crawl = st.session_state.crawl)
             st.markdown(response_text)
-            st.session_state.top_results = top_results
+            st.session_state.search_results = search_results
 
         else:
             response_text = "Model not supported."
@@ -83,10 +76,10 @@ if input_text := st.chat_input():
 
         st.session_state.messages.append({"role": "bot", "content": response_text})
 
-if st.session_state.top_results:
-    if st.button("See top results"):  
-        st.session_state.see_top_results = True
+if st.session_state.search_results:
+    if st.button("See search results"):  
+        st.session_state.see_search_results = True
 
-if st.session_state.see_top_results:
-    st.session_state.see_top_results = False
-    st.switch_page(r"pages\top_results.py")
+if st.session_state.see_search_results:
+    st.session_state.see_search_results = False
+    st.switch_page(r"pages\search_results.py")
