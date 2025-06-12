@@ -1,4 +1,5 @@
 import streamlit as st
+from collections import defaultdict
 
 from gemini_chatbot import answer_query as gemini_answer_query
 
@@ -65,7 +66,22 @@ if input_text := st.chat_input():
         st.session_state.chat_history.append({"role": "user", "content": input_text})
 
     with st.chat_message("bot"):
-        if st.session_state["model"] == "Gemini_RAG":
+        if st.session_state["model"] == "Gemini_RAG":         
+#             response_text = "response"
+#             search_results = defaultdict(str, {
+#     "https://hust.edu.vn/vi/co-cau-to-chuc-bai-viet/giam-doc-hieu-truong-dhbk-ha-noi-qua-cac-thoi-ky.html":
+#         "# Giám đốc/ Hiệu trưởng ĐHBK Hà Nội qua các thời kỳ...",
+    
+#     "https://nld.com.vn/giao-duc-khoa-hoc/truong-dh-bach-khoa-ha-noi-thanh-dh-bach-khoa-ha-noi-20230317134449418.htm":
+#         "# Trường ĐH Bách khoa Hà Nội trở thành ĐH Bách khoa Hà Nội...",
+    
+#     "https://hust.edu.vn/vi/co-cau-to-chuc-bai-viet/ban-giam-doc-dai-hoc.html":
+#         "# Ban Giám đốc đại học\nĐại học Bách khoa Hà Nội\n2025-05-07T15:07:15",
+    
+#     "https://hust.edu.vn/vi/news/hoat-dong-chung/giam-doc-dai-hoc-bach-khoa-ha-noi-truyen-cam-hung-cho-nhung-chu-ca-bach-khoa-vuon-ra-bien-lon-65519.html":
+#         "# Giám đốc truyền cảm hứng cho sinh viên Bách khoa vươn ra biển lớn..."
+# })
+
             response_text, search_results = gemini_answer_query(input_text, crawl = st.session_state.crawl)
             st.markdown(response_text)
             st.session_state.search_results = search_results
